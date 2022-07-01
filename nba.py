@@ -1,24 +1,30 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sat May  2 19:00:21 2020
+Created on Thu Jun 30 16:12:23 2022
 
-@author: vdabadgh
+@author: sdabadghao
 """
+
 
 import numpy as np
 import pandas as pd
 
+
+# filename with key to extract data from several csv files
 filename = 'nba_seasons\leagues_NBA_{}_games_games.csv'
 
+# specific columns to extract from csv's and their headings
 cols = [0, 3, 4, 5, 6]
 names = ['Date', 'Visitor/Neutral', 'V/N points', 'Home/Neutral', 'H/N points']
 years = np.arange(2005, 2019)
 
+# create the dataframe
 df = {year: pd.DataFrame({name: [] for name in names}) for year in years}
 for year in years[:-3]:
     df[year] = pd.read_csv(filename.format(year), header=0, usecols=cols,
                            names=names, keep_default_na=False)
     df[year]['Date'] = pd.to_datetime(df[year]['Date']).dt.date
+
 
 # Seasons 2016 -- 2018 have different formats
 cols = [0, 1, 2, 3, 4]
@@ -150,10 +156,41 @@ for year in years:
         playoffs[year][conf] = list(h.head(8).index)
 
 
-# add tie-breaks
+# Changing season size Part 1
+# ICOD3 to ICOD2 -- only play 2 games instead of 3, removing the last unbalanced home/away match
+# Logic: take one Visitor/Neutral team, count its total ICOD3 games with each competitor. We delete the second away game with the same competitor.
+
+mod_df = df
+for year in years:
+    if year != 2012:
+        indexlist = []
+        tempdf = mod_df[year]
+        tempdf = tempdf[tempdf.label == 'ICOD3']
+        gg = tempdf.groupby(by=['Visitor/Neutral', 'Home/Neutral'])
+        for tt1 in tempdf['Visitor/Neutral'].unique():
+            opponents = tempdf[tempdf['Visitor/Neutral']==tt1]['Home/Neutral'].unique()
+            for tt2 in opponents:
+                gg1 = gg.get_group((tt1,tt2))
+                # Here we need to find the index number of the second entry and store it.
+                if len(gg1) == 2:
+                    indexlist.append(gg1.index[1])
+        # eventually cycling through all groups to get list of 3rd matches to delete from main database
+        mod_df[year] = mod_df[year].drop(indexlist)
 
 
-# Remove ICOD4
-exp1 = df.copy()
-
-
+# Changing season size Part 2
+# ICOD4 to drop two games, removing one home and one away
+mod_df2 = mod_df
+for year in years:
+    if year != 2012:
+        indexlist = []
+        tempdf = mod_df2[year]
+        tempdf = tempdf[tempdf.label == 'ICOD4']
+        gg = tempdf.groupby(by=['Visitor/Neutral', 'Home/Neutral'])
+        for tt1 in tempdf['Visitor/Neutral'].unique():
+            opponents = tempdf[tempdf['Visitor/Neutral']==tt1]['Home/Neutral'].unique()
+            for tt2 in opponents:
+                gg1 = gg.get_group((tt1,tt2))
+                if len(gg1) == 2:
+                    indexlist.append(gg1.index[1])
+        mod_df2[year] = mod_df2[year].drop(indexlist)
